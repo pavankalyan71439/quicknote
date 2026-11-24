@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in | Quick Notes</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main class="auth">
+  <h1>Log in</h1>
+  <form id="form">
+    <div>
+      <label for="username">Username</label>
+      <input id="username" autocomplete="username" required>
+    </div>
+    <div>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+    </div>
+    <span id="status" class="hint" role="status"></span>
+    <button type="submit" id="submit">Log in</button>
+  </form>
+  <p>New here? <a href="/signup">Create an account</a></p>
+</main>
+<script>
+const form = document.getElementById("form");
+const statusEl = document.getElementById("status");
+const submitBtn = document.getElementById("submit");
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  submitBtn.disabled = true;
+  statusEl.className = "hint";
+  statusEl.textContent = "Logging in...";
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username.value, password: password.value }),
+    });
+    const data = await res.json();
+    if (res.ok) { window.location.href = "/"; return; }
+    statusEl.textContent = data.error || "Couldn't log in.";
+    statusEl.className = "hint error";
+  } catch {
+    statusEl.textContent = "Couldn't reach the server. Try again.";
+    statusEl.className = "hint error";
+  }
+  submitBtn.disabled = false;
+});
+</script>
+</body>
+</html>
