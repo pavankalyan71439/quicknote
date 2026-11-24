@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick Notes</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>Quick Notes</h1>
+    <div class="actions">
+      <span id="who" class="hint"></span>
+      <button type="button" id="logout" class="link">Log out</button>
+    </div>
+  </header>
+
+  <form id="note-form">
+    <label for="note-text">New note</label>
+    <textarea id="note-text" maxlength="2000" placeholder="Write a note..."></textarea>
+    <div class="row">
+      <span id="status" class="hint" role="status"></span>
+      <button type="submit" id="save">Save note</button>
+    </div>
+  </form>
+
+  <ul id="notes" style="margin-top:28px" aria-live="polite"></ul>
+  <p id="empty" class="empty" hidden>No notes yet. Write one above.</p>
+</main>
+
+<script>
+const form = document.getElementById("note-form");
+const textEl = document.getElementById("note-text");
+const saveBtn = document.getElementById("save");
+const statusEl = document.getElementById("status");
+const listEl = document.getElementById("notes");
+const emptyEl = document.getElementById("empty");
+
+function setStatus(msg, isError = false) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle("error", isError);
+}
+
+// One helper for every server call. If the login has expired (401),
+// send the person back to the login page.
+async function api(url, options = {}) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (res.status === 401) { window.location.href = "/login"; throw new Error("auth"); }
+  const data = res.status === 204 ? null : await res.json();
+  if (!res.ok) throw new Error(data?.error || "Something went wrong.");
+  return data;
+}
+
+function button(label, className, onClick) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = className;
+  b.textContent = label;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function updateEmpty() {
+  emptyEl.hidden = listEl.children.length > 0;
+}
+
+// Build the normal (read-only) view of a note
+function renderNote(note) {
+  const li = document.createElement("li");
+
+  const p = document.createElement("p");
+  p.textContent = note.text;                 // textContent keeps HTML from running
+
+  const time = document.createElement("time");
+  const when = note.updated_at || note.created_at;
+  time.dateTime = when;
+  time.textContent = (note.updated_at ? "Edited " : "") + new Date(when).toLocaleString();
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  actions.append(
+    button("Edit", "link", () => startEdit(li, note)),
+    button("Delete", "link danger", () => removeNote(li, note))
+  );
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.append(time, actions);
+
+  li.append(p, meta);
+  return li;
+}
+
+// Swap the note for a small edit box
+function startEdit(li, note) {
+  const box = document.createElement("div");
+  box.className = "edit-box";
+
+  const area = document.createElement("textarea");
+  area.value = note.text;
+  area.maxLength = 2000;
+
+  const msg = document.createElement("span");
+  msg.className = "hint";
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
+  actions.append(
+    button("Cancel", "plain", () => li.replaceWith(renderNote(note))),
+    button("Save changes", "", async (e) => {
+      e.target.disabled = true;
+      try {
+        const updated = await api(`/api/notes/${note.id}`, {
+          method: "PUT",
+          body: JSON.stringify({ text: area.value }),
+        });
+        li.replaceWith(renderNote(updated));
+        setStatus("Changes saved.");
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.classList.add("error");
+        e.target.disabled = false;
+      }
+    })
+  );
+
+  box.append(area, msg, actions);
+  li.replaceChildren(box);
+  area.focus();
+}
+
+async function removeNote(li, note) {
+  if (!confirm("Delete this note? This can't be undone.")) return;
+  try {
+    await api(`/api/notes/${note.id}`, { method: "DELETE" });
+    li.remove();
+    updateEmpty();
+    setStatus("Note deleted.");
+  } catch (err) {
+    setStatus(err.message, true);
+  }
+}
+
+async function loadPage() {
+  try {
+    const me = await api("/api/me");
+    document.getElementById("who").textContent = `Signed in as ${me.username}`;
+    const notes = await api("/api/notes");
+    listEl.replaceChildren(...notes.map(renderNote));
+  } catch (err) {
+    if (err.message !== "auth") setStatus("Couldn't load your notes.", true);
+  }
+  updateEmpty();
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  saveBtn.disabled = true;
+  setStatus("Saving...");
+  try {
+    const note = await api("/api/notes", {
+      method: "POST",
+      body: JSON.stringify({ text: textEl.value }),
+    });
+    listEl.prepend(renderNote(note));
+    textEl.value = "";
+    setStatus("Note saved.");
+    updateEmpty();
+  } catch (err) {
+    if (err.message !== "auth") setStatus(err.message, true);
+  } finally {
+    saveBtn.disabled = false;
+    textEl.focus();
+  }
+});
+
+document.getElementById("logout").addEventListener("click", async () => {
+  await fetch("/api/logout", { method: "POST" });
+  window.location.href = "/login";
+});
+
+loadPage();
+</script>
+</body>
+</html>
