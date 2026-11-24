@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign up | Quick Notes</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main class="auth">
+  <h1>Create your account</h1>
+  <form id="form">
+    <div>
+      <label for="username">Username</label>
+      <input id="username" autocomplete="username" required minlength="3" maxlength="30">
+    </div>
+    <div>
+      <label for="password">Password (at least 6 characters)</label>
+      <input id="password" type="password" autocomplete="new-password" required minlength="6">
+    </div>
+    <div>
+      <label for="password2">Confirm password</label>
+      <input id="password2" type="password" autocomplete="new-password" required>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="show" style="width:auto"> Show password
+    </label>
+    <span id="status" class="hint" role="status"></span>
+    <button type="submit" id="submit">Sign up</button>
+  </form>
+  <p>Already have an account? <a href="/login">Log in</a></p>
+</main>
+<script>
+const form = document.getElementById("form");
+const statusEl = document.getElementById("status");
+const submitBtn = document.getElementById("submit");
+const usernameEl = document.getElementById("username");
+const passwordEl = document.getElementById("password");
+const password2El = document.getElementById("password2");
+const showEl = document.getElementById("show");
+
+// Show or hide both password fields together
+showEl.addEventListener("change", () => {
+  const type = showEl.checked ? "text" : "password";
+  passwordEl.type = type;
+  password2El.type = type;
+});
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  statusEl.className = "hint";
+  if (passwordEl.value !== password2El.value) {
+    statusEl.textContent = "The passwords don't match.";
+    statusEl.className = "hint error";
+    return;
+  }
+  submitBtn.disabled = true;
+  statusEl.textContent = "Creating your account...";
+  try {
+    const res = await fetch("/api/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: usernameEl.value, password: passwordEl.value }),
+    });
+    const data = await res.json();
+    if (res.ok) { window.location.href = "/"; return; }
+    statusEl.textContent = data.error || "Couldn't create the account.";
+    statusEl.className = "hint error";
+  } catch {
+    statusEl.textContent = "Couldn't reach the server. Try again.";
+    statusEl.className = "hint error";
+  }
+  submitBtn.disabled = false;
+});
+</script>
+</body>
+</html>
